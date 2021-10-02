@@ -17,7 +17,7 @@ variables:
   vmImageName: 'ubuntu-latest'
 
   # Working Directory
-  workingDirectory: '$(System.DefaultWorkingDirectory)/craigslist/housing/CheckHousing/CheckBayArea'
+  workingDirectory: '$(System.DefaultWorkingDirectory)/craigslist/housing/CheckHousing'
 
 stages:
 - stage: Build
