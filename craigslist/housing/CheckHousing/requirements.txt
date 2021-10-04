@@ -8,5 +8,5 @@ bs4
 azure-core
 azure-storage-blob
 azure-cosmosdb-table
-BeautifulSoup
+bs4
 python-dateutil
