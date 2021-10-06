@@ -1,9 +1,9 @@
 #import get to call a get request on the site
 from requests import get
 from bs4 import BeautifulSoup
-import cleanUtils as clean
 from dateutil import parser
-import dbUtils
+from . import cleanUtils as clean
+from . import dbUtils
 
 def collectLatestCLPosts():
     searchUrl = 'https://sfbay.craigslist.org/d/rooms-shares/search/sby/roo?availabilityMode=0&s=334'

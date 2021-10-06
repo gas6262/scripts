@@ -1,6 +1,6 @@
 import datetime
 import logging
-import scrapeHouses
+from . import scrapeHouses
 
 import azure.functions as func
 
