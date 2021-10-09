@@ -7,7 +7,7 @@ def insertPosts(posts):
     envVarName = "scriptsStorageConnString"
     connString = os.environ.get(envVarName)
     i = 0
-    
+
     try:
         for post in posts:
         

@@ -25,3 +25,35 @@ def getPostId(date, title):
 
     h = hash.hexdigest()
     return h
+
+def parseHousing(hI, housingJson):
+
+    if 'br' in hI:
+        val = hI.replace("\n", "").replace("br", "").strip()
+        housingJson['br'] = int(val)
+
+    elif 'ft' in hI:
+        val = hI.replace("\n", "").replace("ft", "").strip()
+        housingJson['ft'] = int(val)
+
+    return housingJson
+
+def getHousing(post):
+
+    housingArea = post.find('span', class_='housing')
+
+    housingJson = {
+        "br": None,
+        "size": None
+    }
+
+    if housingArea:
+        housingText = housingArea.text.strip()
+        housingArray = housingText.split("-")
+
+        for hI in housingArray:
+            housingJson = parseHousing(hI, housingJson)
+
+    return housingJson
+
+    

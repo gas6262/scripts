@@ -5,10 +5,9 @@ from dateutil import parser
 from . import cleanUtils as clean
 from . import dbUtils
 
-def collectLatestCLPosts():
-    searchUrl = 'https://sfbay.craigslist.org/d/rooms-shares/search/sby/roo?availabilityMode=0&s=334'
+def getHousingArray(searchUrl):
 
-    #get the first page of the east bay housing prices
+    # get the first page of the east bay housing prices
     print(f"Calling craigslist for results: {searchUrl}")
     response = get(searchUrl) #get rid of those lame-o's that post a housing option without a pic using their filter
     html_soup = BeautifulSoup(response.text, 'html.parser')
@@ -33,6 +32,7 @@ def collectLatestCLPosts():
             day = parser.parse(post.find('time', class_='result-date').text)
             hood = clean.cleanHood(post.find('span', class_='result-hood').text)
 
+            housing = clean.getHousing(post)
             h = clean.getPostId(date, title)
 
             post_info = {
@@ -43,7 +43,10 @@ def collectLatestCLPosts():
                 "title": title,
                 "link": link,
                 "price": price,
-                "hood": hood
+                "hood": hood,
+
+                "rooms": housing['br'],
+                "size": housing['size']
             }
 
             posts.append(post_info)
@@ -52,5 +55,24 @@ def collectLatestCLPosts():
             skippedPosts += 1
             print(f'Failed to parse or insert post. Skipping ({skippedPosts})\n\n{e}\n\n{str(post)}\n')
 
+    return posts
+
+def collectSouthBayPosts():
+    searchUrl = r'https://sfbay.craigslist.org/d/rooms-shares/search/sby/roo?availabilityMode=0&s=334'
+
+    posts = getHousingArray(searchUrl)
+
     dbUtils.insertPosts(posts)
     print(f"Completed CL entry insertion")
+
+def collectTahoeRentals():
+
+    searchUrl = r'https://reno.craigslist.org/d/apartments-housing-for-rent/search/apa?query=south%20lake%20tahoe'
+
+    posts = getHousingArray(searchUrl)
+
+    dbUtils.insertPosts(posts)
+    print(f"Completed CL entry insertion")
+
+if __name__ == "__main__":
+    collectSouthBayPosts()
