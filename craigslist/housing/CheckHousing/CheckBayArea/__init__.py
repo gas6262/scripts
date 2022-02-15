@@ -11,7 +11,13 @@ def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
 
-    scrapeHouses.collectSouthBayPosts()  
-    scrapeHouses.collectTahoeRentals()  
+    filters = [
+        {
+            "rooms" : ">3",
+            "price" : ">3000"
+        }
+    ]
+
+    scrapeHouses.collectSouthBayPosts(filters)
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
