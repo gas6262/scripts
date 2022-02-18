@@ -3,8 +3,8 @@ from argparse import ArgumentError
 from requests import get
 from bs4 import BeautifulSoup
 from dateutil import parser
-import cleanUtils as clean
-import dbUtils
+from . import cleanUtils as clean
+from . import dbUtils
 
 # Get the listings using a craigslist URL
 def getHousingArray(searchUrl):
@@ -143,7 +143,6 @@ def collectSouthBayPosts(filters):
     filteredPosts = applyFilters(posts, filters)    
 
     dbUtils.insertPosts(filteredPosts)
-    mailPosts
     print(f"Completed CL entry insertion")
 
 # Method specifically for Tahoe
