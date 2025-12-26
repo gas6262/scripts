@@ -19,4 +19,3 @@ def post_json(url, data=None, cookie=None):
     return response.json()
 
 resp = post_json(url, data=query, cookie=cookie)
-print(resp)
