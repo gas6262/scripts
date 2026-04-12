@@ -4,7 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 {% raw %}
-const { connectDB } = require("./db");
+const { connectDB, dbState } = require("./db");
 const { Item } = require("./models");
 {% endraw %}
 
@@ -15,16 +15,17 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// Health check
 app.get("/health", (_req, res) => {
 {% raw %}
-  res.json({ status: "ok", service: "{% endraw %}{{ service.name }}{% raw %}" });
+  res.json({ status: "ok", service: "{% endraw %}{{ service.name }}{% raw %}", db: dbState() });
 {% endraw %}
 });
 
-// List items
 app.get("/items", async (_req, res) => {
 {% raw %}
+  if (dbState() !== "connected") {
+    return res.status(503).json({ error: "database unavailable", db: dbState() });
+  }
   try {
     const items = await Item.find().lean();
     res.json(items);
@@ -35,16 +36,12 @@ app.get("/items", async (_req, res) => {
 {% endraw %}
 });
 
-async function start() {
+app.listen(PORT, () => {
 {% raw %}
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`API listening on port ${PORT}`);
-  });
-}
+  console.log(`API listening on port ${PORT}`);
+});
 
-start().catch((err) => {
-  console.error("Failed to start API:", err);
-  process.exit(1);
+connectDB().catch((err) => {
+  console.error("DB connect failed (API still running):", err.message);
 });
 {% endraw %}

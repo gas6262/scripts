@@ -1,6 +1,8 @@
 """Phase H: Secret management steps."""
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -9,7 +11,19 @@ from platform_cli.engine.context import ScaffoldContext
 from platform_cli.engine.registry import register_step
 from platform_cli.engine.step import BaseStep
 from platform_cli.shell.run import run_cmd
-from platform_cli.templates.renderer import render_to_file
+
+
+def _read_env(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not path.exists():
+        return out
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        out[key.strip()] = val.strip()
+    return out
 
 
 @register_step
@@ -43,38 +57,37 @@ class SyncSecretsToGcp(BaseStep):
 
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
         project_id = ctx.project_id
+        env_vars = _read_env(ctx.project_dir / "services" / "api" / ".env")
 
-        # Read API .env for secret values
-        env_file = ctx.project_dir / "services" / "api" / ".env"
-        env_vars: dict[str, str] = {}
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, _, val = line.partition("=")
-                    env_vars[key.strip()] = val.strip()
-
-        synced = []
+        synced: list[str] = []
         for key, value in env_vars.items():
             secret_name = key.lower().replace("_", "-")
 
-            # Check if secret exists
-            result = run_cmd(
+            exists = run_cmd(
                 f"gcloud secrets describe {secret_name} --project={project_id}"
-            )
-            if not result.ok:
+            ).ok
+            if not exists:
                 run_cmd(
-                    f"gcloud secrets create {secret_name} --project={project_id} "
-                    f"--replication-policy=automatic",
+                    f"gcloud secrets create {secret_name} "
+                    f"--project={project_id} --replication-policy=automatic",
                     check=True,
                 )
 
-            # Add version with value
-            run_cmd(
-                f'printf "%s" "{value}" | gcloud secrets versions add {secret_name} '
-                f"--data-file=- --project={project_id}",
-                check=True,
-            )
+            # Write value to a temp file to avoid shell-escaping pitfalls.
+            with tempfile.NamedTemporaryFile(
+                "w", delete=False, prefix="secret-", suffix=".txt"
+            ) as tmp:
+                tmp.write(value)
+                tmp_path = tmp.name
+            try:
+                run_cmd(
+                    f"gcloud secrets versions add {secret_name} "
+                    f"--data-file={tmp_path} --project={project_id}",
+                    check=True,
+                )
+            finally:
+                Path(tmp_path).unlink(missing_ok=True)
+
             synced.append(key)
 
         return {"synced_secrets": synced}
@@ -87,7 +100,6 @@ class WriteEnvExampleSecrets(BaseStep):
     depends_on = ["H.1_write_secret_manifest"]
 
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
-        # Append secret-backed vars to .env.example
         env_example = ctx.project_dir / ".env.example"
         if env_example.exists():
             content = env_example.read_text()

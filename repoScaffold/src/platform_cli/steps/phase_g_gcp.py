@@ -14,22 +14,36 @@ class CreateGcpProject(BaseStep):
     step_id = "G.1_create_gcp_project"
     phase = "G"
     depends_on = ["B.1_create_directories"]
-    max_retries = 1
+    max_retries = 0
 
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
         project_id = ctx.project_id
 
-        # Check if project already exists
-        result = run_cmd(f"gcloud projects describe {project_id}")
-        if result.ok:
+        # Require gcloud auth
+        who = run_cmd("gcloud config get-value account")
+        if not who.ok or not who.stdout.strip():
+            raise RuntimeError(
+                "No gcloud account found. Run `gcloud auth login` then retry."
+            )
+
+        # Reuse an existing project
+        if run_cmd(f"gcloud projects describe {project_id}").ok:
+            run_cmd(f"gcloud config set project {project_id}", check=True)
             return {"gcp_project_exists": True, "project_id": project_id}
 
-        # Create the project
-        run_cmd(
-            f"gcloud projects create {project_id} --name={ctx.project_name}",
-            check=True,
+        # Try to create
+        result = run_cmd(
+            f"gcloud projects create {project_id} --name={ctx.project_name}"
         )
-        # Set as active project
+        if not result.ok:
+            raise RuntimeError(
+                f"Could not create GCP project '{project_id}'. "
+                "This usually means you need a billing account + organization, "
+                "or the project ID is taken. Either (a) set `project.cloud.project_id` "
+                "in the manifest to an existing project you own, or (b) create the "
+                "project manually in the GCP console and re-run with --skip-phase (no G).\n"
+                f"gcloud error: {result.stderr}"
+            )
         run_cmd(f"gcloud config set project {project_id}", check=True)
         return {"gcp_project_created": True, "project_id": project_id}
 

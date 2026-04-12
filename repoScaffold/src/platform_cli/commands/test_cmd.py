@@ -1,5 +1,8 @@
-"""platform-cli test [service] — stub, filled in Tier 7."""
+"""platform-cli test [service] — run Phase K tests against a scaffolded project."""
 from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -21,12 +24,30 @@ console = Console()
     default=".",
     help="Path to the generated project directory.",
 )
-def test(service: str | None, manifest: str | None, project_dir: str) -> None:
-    """Run tests against a scaffolded project."""
-    from pathlib import Path
+@click.option(
+    "--skip", "-s",
+    multiple=True,
+    help="Substring(s) matching step_ids to skip (e.g. docker, terraform).",
+)
+@click.option(
+    "--only", "-o",
+    multiple=True,
+    help="Substring(s) matching step_ids to include (overrides service filter).",
+)
+def test(
+    service: str | None,
+    manifest: str | None,
+    project_dir: str,
+    skip: tuple[str, ...],
+    only: tuple[str, ...],
+) -> None:
+    """Run tests against a scaffolded project.
+
+    Without arguments, runs all Phase K tests. Pass a service name (api, web,
+    worker) to run only its tests, or use --only/--skip for finer control.
+    """
     from platform_cli.engine.context import ScaffoldContext
     from platform_cli.engine.registry import build_dag
-    from platform_cli.engine.runner import StepRunner
     from platform_cli.engine.state import RunState
     from platform_cli.manifest.loader import load_manifest
     from platform_cli.manifest.schema import ProjectManifest, ProjectConfig, CloudConfig
@@ -42,16 +63,19 @@ def test(service: str | None, manifest: str | None, project_dir: str) -> None:
 
     ctx = ScaffoldContext(manifest=m, project_dir=pdir)
 
-    # Only run Phase K steps
     all_steps = build_dag()
     test_steps = [s for s in all_steps if s.phase == "K"]
 
-    if service:
+    if only:
+        needles = [o.lower() for o in only]
+        test_steps = [s for s in test_steps if any(n in s.step_id.lower() for n in needles)]
+    elif service:
         svc_lower = service.lower()
-        test_steps = [
-            s for s in test_steps
-            if svc_lower in s.step_id.lower()
-        ]
+        test_steps = [s for s in test_steps if svc_lower in s.step_id.lower()]
+
+    if skip:
+        needles = [s.lower() for s in skip]
+        test_steps = [s for s in test_steps if not any(n in s.step_id.lower() for n in needles)]
 
     if not test_steps:
         console.print("[yellow]No matching test steps found.[/yellow]")
@@ -61,6 +85,33 @@ def test(service: str | None, manifest: str | None, project_dir: str) -> None:
     state.clear()
 
     console.print(f"\n[bold]Running tests ({len(test_steps)} steps)...[/bold]\n")
-    runner = StepRunner(test_steps, state)
-    runner.run_all(ctx, resume=False)
+
+    passed: list[str] = []
+    failed: list[tuple[str, str]] = []
+    skipped: list[str] = []
+
+    for step in test_steps:
+        if step.should_skip(ctx):
+            console.print(f"  [yellow]skip[/yellow]    {step.step_id}")
+            skipped.append(step.step_id)
+            continue
+        try:
+            console.print(f"  [green]run[/green]     {step.step_id}")
+            step.run(ctx)
+            console.print(f"  [green]pass[/green]    {step.step_id}")
+            passed.append(step.step_id)
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc).splitlines()[0][:200] if str(exc) else exc.__class__.__name__
+            console.print(f"  [red]fail[/red]    {step.step_id}: {msg}")
+            failed.append((step.step_id, str(exc)))
+
+    console.print("")
+    console.print(f"[bold]Summary:[/bold] {len(passed)} passed, {len(failed)} failed, {len(skipped)} skipped")
+    for sid, err in failed:
+        console.print(f"  [red]FAIL[/red] {sid}")
+        for line in err.splitlines()[:6]:
+            console.print(f"    {line}")
+
+    if failed:
+        sys.exit(1)
     console.print("\n[bold green]All tests passed.[/bold green]\n")

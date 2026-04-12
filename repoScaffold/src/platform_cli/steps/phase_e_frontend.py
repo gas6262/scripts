@@ -27,22 +27,38 @@ class InitReact(BaseStep):
         web_dir = ctx.project_dir / "services" / "web"
         package_json = web_dir / "package.json"
 
-        if not package_json.exists():
-            # Use create-react-app to scaffold
-            result = run_cmd(
-                f"npx create-react-app {web_dir} --template default",
-                timeout=120,
+        if package_json.exists():
+            return {"react_initialized": True, "source": "existing"}
+
+        # Vite is non-interactive when --template is provided.
+        result = run_cmd(
+            f"npm create vite@latest {web_dir.name} -- --template react",
+            cwd=str(web_dir.parent),
+            timeout=120,
+        )
+        if result.ok and package_json.exists():
+            return {"react_initialized": True, "source": "vite"}
+
+        # Fallback: render our template set directly.
+        svc = ctx.service("webapp")
+        api_svc = ctx.service("api")
+        api_port = api_svc.port if api_svc else 3006
+        web_port = svc.port if svc else 3005
+        for tmpl, rel in [
+            ("services/web/package.json.j2", "package.json"),
+            ("services/web/vite.config.js.j2", "vite.config.js"),
+            ("services/web/index.html.j2", "index.html"),
+            ("services/web/main.jsx.j2", "src/main.jsx"),
+        ]:
+            render_to_file(
+                tmpl,
+                web_dir / rel,
+                project=ctx.manifest.project,
+                service=svc,
+                api_port=api_port,
+                web_port=web_port,
             )
-            if not result.ok:
-                # Fallback: write minimal package.json
-                svc = ctx.service("webapp")
-                render_to_file(
-                    "services/web/package.json.j2",
-                    package_json,
-                    project=ctx.manifest.project,
-                    service=svc,
-                )
-        return {"react_initialized": True}
+        return {"react_initialized": True, "source": "fallback"}
 
 
 @register_step
@@ -55,19 +71,20 @@ class ConfigureProxy(BaseStep):
         return super().should_skip(ctx) or not _web_enabled(ctx)
 
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
-        import json
-
         web_dir = ctx.project_dir / "services" / "web"
-        pkg_path = web_dir / "package.json"
 
+        svc = ctx.service("webapp")
         api_svc = ctx.service("api")
         api_port = api_svc.port if api_svc else 3006
+        web_port = svc.port if svc else 3005
 
-        if pkg_path.exists():
-            pkg = json.loads(pkg_path.read_text())
-            pkg["proxy"] = f"http://localhost:{api_port}"
-            pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
-        return {"proxy_configured": True, "api_port": api_port}
+        render_to_file(
+            "services/web/vite.config.js.j2",
+            web_dir / "vite.config.js",
+            api_port=api_port,
+            web_port=web_port,
+        )
+        return {"proxy_configured": True, "api_port": api_port, "web_port": web_port}
 
 
 @register_step
@@ -87,8 +104,8 @@ class WriteItemsFetch(BaseStep):
         api_port = api_svc.port if api_svc else 3006
 
         render_to_file(
-            "services/web/App.js.j2",
-            web_src / "App.js",
+            "services/web/App.jsx.j2",
+            web_src / "App.jsx",
             api_port=api_port,
         )
         render_to_file(
@@ -96,6 +113,15 @@ class WriteItemsFetch(BaseStep):
             web_src / "api.js",
             api_port=api_port,
         )
+        render_to_file(
+            "services/web/index.html.j2",
+            ctx.project_dir / "services" / "web" / "index.html",
+            project=ctx.manifest.project,
+        )
+        # Drop the CRA-era App.js if Vite didn't overwrite it (Vite's default is App.jsx).
+        legacy_app = web_src / "App.js"
+        if legacy_app.exists():
+            legacy_app.unlink()
         return {"items_fetch_written": True}
 
 
@@ -111,10 +137,15 @@ class WriteFrontendDockerfile(BaseStep):
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
         api_svc = ctx.service("api")
         api_name = api_svc.name if api_svc else "api"
+        web_dir = ctx.project_dir / "services" / "web"
 
         render_to_file(
             "services/web/Dockerfile.j2",
-            ctx.project_dir / "services" / "web" / "Dockerfile",
+            web_dir / "Dockerfile",
             api_name=api_name,
+        )
+        render_to_file(
+            "services/web/.dockerignore.j2",
+            web_dir / ".dockerignore",
         )
         return {}

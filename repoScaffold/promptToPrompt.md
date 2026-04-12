@@ -1,3 +1,5 @@
+This is a great start. Let's refine the prompt a bit more based on these items
+
 the CLI should be Python based, readable and modular so I or an agent can easily make changes intuitively without breaking other aspects of the app
 
 It needs to also setup the new project in GCP. All APIs and apps should run in Cloudrun and everything should have a big focus on docker containerization and using the same port number for most HTTP requests to make everything simple. It should be highly opinionated. Everything should be dockerized out of the box.

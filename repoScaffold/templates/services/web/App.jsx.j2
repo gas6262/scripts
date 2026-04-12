@@ -1,8 +1,7 @@
-{% raw %}
-import React, { useEffect, useState } from "react";
+{% raw %}import { useEffect, useState } from "react";
 import { fetchItems } from "./api";
 
-function App() {
+export default function App() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,7 +17,7 @@ function App() {
   if (error) return <div>Error: {error}</div>;
 
   return (
-    <div style={{ padding: "2rem" }}>
+    <div style={{ padding: "2rem", fontFamily: "system-ui, sans-serif" }}>
       <h1>Items</h1>
       {items.length === 0 ? (
         <p>No items found.</p>
@@ -32,6 +31,4 @@ function App() {
     </div>
   );
 }
-
-export default App;
 {% endraw %}

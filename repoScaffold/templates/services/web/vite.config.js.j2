@@ -1,0 +1,19 @@
+{% raw %}import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: true,
+    port: {% endraw %}{{ web_port }}{% raw %},
+    proxy: {
+      "/items": "http://localhost:{% endraw %}{{ api_port }}{% raw %}",
+      "/health": "http://localhost:{% endraw %}{{ api_port }}{% raw %}",
+    },
+  },
+  preview: {
+    host: true,
+    port: {% endraw %}{{ web_port }}{% raw %},
+  },
+});
+{% endraw %}

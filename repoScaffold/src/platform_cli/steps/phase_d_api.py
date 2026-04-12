@@ -100,15 +100,20 @@ class WriteApiDockerfile(BaseStep):
         return super().should_skip(ctx) or not _api_enabled(ctx)
 
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
+        api_dir = ctx.project_dir / "services" / "api"
         render_to_file(
             "services/api/Dockerfile.j2",
-            ctx.project_dir / "services" / "api" / "Dockerfile",
+            api_dir / "Dockerfile",
+        )
+        render_to_file(
+            "services/api/.dockerignore.j2",
+            api_dir / ".dockerignore",
         )
         return {}
 
 
 @register_step
-class WriteApiEnv(BaseStep):
+class InitializeApiEnv(BaseStep):
     step_id = "D.5_write_api_env"
     phase = "D"
     depends_on = ["D.1_init_express"]
@@ -117,12 +122,13 @@ class WriteApiEnv(BaseStep):
         return super().should_skip(ctx) or not _api_enabled(ctx)
 
     def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
+        # PORT is NOT written here — local runs use the manifest default
+        # from index.js, and Docker sets PORT=80 via its own ENV.
         env_file = ctx.project_dir / "services" / "api" / ".env"
         if not env_file.exists():
             db = ctx.manifest.database
             env_file.write_text(
                 f"MONGODB_URI=mongodb+srv://<user>:<password>@{db.atlas_cluster.lower()}.xxxxx.mongodb.net/{db.db_name}?retryWrites=true&w=majority\n"
                 f"DB_NAME={db.db_name}\n"
-                f"PORT=80\n"
             )
         return {}
