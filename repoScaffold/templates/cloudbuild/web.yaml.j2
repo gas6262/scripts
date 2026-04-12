@@ -1,0 +1,32 @@
+steps:
+  # Build the Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "{{ manifest.project.cloud.region }}-docker.pkg.dev/{{ manifest.project.cloud.project_id }}/{{ manifest.project.name | lower | replace(' ', '-') }}-docker/{{ service.name }}:$COMMIT_SHA"
+      - "./services/web"
+
+  # Push to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "{{ manifest.project.cloud.region }}-docker.pkg.dev/{{ manifest.project.cloud.project_id }}/{{ manifest.project.name | lower | replace(' ', '-') }}-docker/{{ service.name }}:$COMMIT_SHA"
+
+  # Deploy to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "{{ service.name }}"
+      - "--image={{ manifest.project.cloud.region }}-docker.pkg.dev/{{ manifest.project.cloud.project_id }}/{{ manifest.project.name | lower | replace(' ', '-') }}-docker/{{ service.name }}:$COMMIT_SHA"
+      - "--region={{ manifest.project.cloud.region }}"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+
+images:
+  - "{{ manifest.project.cloud.region }}-docker.pkg.dev/{{ manifest.project.cloud.project_id }}/{{ manifest.project.name | lower | replace(' ', '-') }}-docker/{{ service.name }}:$COMMIT_SHA"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

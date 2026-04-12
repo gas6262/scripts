@@ -1,0 +1,17 @@
+# Networking module — minimal setup for Cloud Run
+# Cloud Run services are publicly accessible by default.
+# Add VPC connectors, custom domains, or load balancers here as needed.
+
+resource "google_compute_network" "vpc" {
+  name                    = "{{ '${var.project_prefix}' }}-vpc"
+  project                 = var.project_id
+  auto_create_subnetworks = true
+}
+
+resource "google_vpc_access_connector" "connector" {
+  name          = "{{ '${var.project_prefix}' }}-connector"
+  project       = var.project_id
+  region        = var.region
+  ip_cidr_range = "10.8.0.0/28"
+  network       = google_compute_network.vpc.name
+}

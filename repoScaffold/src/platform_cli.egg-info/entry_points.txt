@@ -1,0 +1,2 @@
+[console_scripts]
+platform-cli = platform_cli.cli:cli

@@ -1,0 +1,46 @@
+# {{ manifest.project.name }} — Architecture & Conventions
+
+## Project Overview
+
+**{{ manifest.project.name }}** is a full-stack application deployed on GCP Cloud Run.
+
+- **Environment:** {{ manifest.project.env }}
+- **Cloud Provider:** {{ manifest.project.cloud.provider | upper }}
+- **Region:** {{ manifest.project.cloud.region }}
+- **Database:** {{ manifest.database.type }} ({{ manifest.database.atlas_cluster }})
+
+## Directory Structure
+
+```
+{{ manifest.project.name }}/
+  services/
+    api/          # Express.js API server (port {{ manifest.services | selectattr('type', 'equalto', 'api') | map(attribute='port') | first | default(3006) }})
+    web/          # React frontend (port {{ manifest.services | selectattr('type', 'equalto', 'webapp') | map(attribute='port') | first | default(3005) }})
+    worker/       # Python Cloud Run worker
+  infra/
+    terraform/    # IaC modules + environments
+  cloudbuild/     # Cloud Build pipeline configs
+  cloudrun/       # Cloud Run service specs
+```
+
+## Conventions
+
+- **Services communicate via HTTP contracts only.** No shared code between services.
+- **Secrets** are managed via GCP Secret Manager. Local dev uses `.env` files.
+- **Infrastructure** is managed with Terraform. One pipeline per environment.
+- **Docker** is required for all services. Containers expose port 80 internally.
+- **API endpoints** are the contract between frontend and backend.
+
+## Key Endpoints
+
+| Service | Endpoint    | Description       |
+|---------|-------------|-------------------|
+| API     | GET /items  | List all items    |
+| API     | GET /health | Health check      |
+
+## Development
+
+1. Install dependencies: `platform-cli install`
+2. Start services: `docker compose up`
+3. API: http://localhost:{{ manifest.services | selectattr('type', 'equalto', 'api') | map(attribute='port') | first | default(3006) }}
+4. Web: http://localhost:{{ manifest.services | selectattr('type', 'equalto', 'webapp') | map(attribute='port') | first | default(3005) }}

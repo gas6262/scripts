@@ -1,0 +1,48 @@
+# {{ manifest.project.name }}
+
+Full-stack application scaffolded with `platform-cli`.
+
+## Quick Start
+
+```bash
+# Install required tools
+platform-cli install
+
+# Start all services locally
+docker compose up --build
+
+# Or run services individually:
+cd services/api && npm install && npm start
+cd services/web && npm install && npm start
+```
+
+## Services
+
+| Service | Type    | Port | Stack   |
+|---------|---------|------|---------|
+{% for svc in manifest.services %}
+{% if svc.enabled %}
+| {{ svc.name }} | {{ svc.type }} | {{ svc.port }} | {{ svc.stack }} |
+{% endif %}
+{% endfor %}
+
+## Infrastructure
+
+- **Cloud Provider:** {{ manifest.project.cloud.provider | upper }}
+- **Region:** {{ manifest.project.cloud.region }}
+- **Database:** {{ manifest.database.type }}
+
+### Deploy
+
+```bash
+# Terraform plan
+cd infra/terraform/envs/dev
+terraform init && terraform plan
+
+# Cloud Build (triggered via push or manual)
+gcloud builds submit --config=cloudbuild/api.yaml
+```
+
+## Project Manifest
+
+See `project.manifest.yaml` for the full project configuration.

@@ -1,0 +1,33 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: {{ service.name }}
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      serviceAccountName: {{ manifest.project.name | lower | replace(' ', '-') }}-runtime@{{ manifest.project.cloud.project_id }}.iam.gserviceaccount.com
+      containers:
+        - image: {{ manifest.project.cloud.region }}-docker.pkg.dev/{{ manifest.project.cloud.project_id }}/{{ manifest.project.name | lower | replace(' ', '-') }}-docker/{{ service.name }}:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-uri
+                  key: latest
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: db-name
+                  key: latest
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi

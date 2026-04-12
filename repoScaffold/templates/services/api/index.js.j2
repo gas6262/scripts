@@ -1,0 +1,50 @@
+require("dotenv").config();
+
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+{% raw %}
+const { connectDB } = require("./db");
+const { Item } = require("./models");
+{% endraw %}
+
+const app = express();
+const PORT = process.env.PORT || {{ service.port }};
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+
+// Health check
+app.get("/health", (_req, res) => {
+{% raw %}
+  res.json({ status: "ok", service: "{% endraw %}{{ service.name }}{% raw %}" });
+{% endraw %}
+});
+
+// List items
+app.get("/items", async (_req, res) => {
+{% raw %}
+  try {
+    const items = await Item.find().lean();
+    res.json(items);
+  } catch (err) {
+    console.error("GET /items error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+{% endraw %}
+});
+
+async function start() {
+{% raw %}
+  await connectDB();
+  app.listen(PORT, () => {
+    console.log(`API listening on port ${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error("Failed to start API:", err);
+  process.exit(1);
+});
+{% endraw %}

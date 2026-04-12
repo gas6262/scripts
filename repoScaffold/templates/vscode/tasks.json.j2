@@ -1,0 +1,49 @@
+{% raw %}
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "API: Install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/services/api" }
+    },
+    {
+      "label": "API: Start",
+      "type": "shell",
+      "command": "npm start",
+      "options": { "cwd": "${workspaceFolder}/services/api" },
+      "isBackground": true
+    },
+    {
+      "label": "Web: Install",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/services/web" }
+    },
+    {
+      "label": "Web: Start",
+      "type": "shell",
+      "command": "npm start",
+      "options": { "cwd": "${workspaceFolder}/services/web" },
+      "isBackground": true
+    },
+    {
+      "label": "Docker: Build All",
+      "type": "shell",
+      "command": "docker compose build"
+    },
+    {
+      "label": "Docker: Up",
+      "type": "shell",
+      "command": "docker compose up"
+    },
+    {
+      "label": "Terraform: Plan",
+      "type": "shell",
+      "command": "terraform plan",
+      "options": { "cwd": "${workspaceFolder}/infra/terraform/envs/dev" }
+    }
+  ]
+}
+{% endraw %}

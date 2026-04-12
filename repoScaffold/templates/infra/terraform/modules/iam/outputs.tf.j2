@@ -1,0 +1,9 @@
+output "build_sa_email" {
+  description = "Email of the build service account"
+  value       = google_service_account.build.email
+}
+
+output "runtime_sa_email" {
+  description = "Email of the runtime service account"
+  value       = google_service_account.runtime.email
+}

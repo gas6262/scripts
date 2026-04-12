@@ -1,0 +1,31 @@
+project:
+  name: MyApp
+  env: dev
+  cloud:
+    provider: gcp
+    region: us-central1
+    project_id: MyApp # Should default to project name
+
+database:
+  type: mongodb
+  atlas_cluster: Cluster0
+  db_name: my_app
+
+services:
+  - type: api
+    enabled: true
+    name: api
+    subdomain: api # should be automatic based 
+    stack: express
+    port: 3006 # API should default to 3006
+
+  - type: webapp
+    enabled: true
+    name: app
+    subdomain: app # default to name
+    stack: react
+    port: 3005 # Web should default to 3005
+
+  - type: worker # Should use Cloud run function by default
+    enabled: false
+    gpu: optional

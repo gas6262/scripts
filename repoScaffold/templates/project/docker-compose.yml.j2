@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+{% for svc in services %}
+{% if svc.enabled %}
+{% if svc.type == "api" %}
+  {{ svc.name }}:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    ports:
+      - "{{ svc.port }}:80"
+    env_file:
+      - ./services/api/.env
+    volumes:
+      - ./services/api/src:/app/src
+    restart: unless-stopped
+{% elif svc.type == "webapp" %}
+  {{ svc.name }}:
+    build:
+      context: ./services/web
+      dockerfile: Dockerfile
+    ports:
+      - "{{ svc.port }}:80"
+    depends_on:
+      - {{ manifest.services | selectattr('type', 'equalto', 'api') | map(attribute='name') | first | default('api') }}
+    restart: unless-stopped
+{% elif svc.type == "worker" %}
+  {{ svc.name }}:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    env_file:
+      - ./services/worker/.env
+    restart: unless-stopped
+{% endif %}
+{% endif %}
+{% endfor %}

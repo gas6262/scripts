@@ -1,0 +1,62 @@
+{% for svc in manifest.services %}
+{% if svc.enabled and svc.type in ['api', 'webapp', 'worker'] %}
+resource "google_cloud_run_v2_service" "{{ svc.name }}" {
+  name     = "{{ svc.name }}"
+  location = var.region
+
+  template {
+    service_account = var.runtime_service_account
+
+    containers {
+      image = "{{ '${var.region}' }}-docker.pkg.dev/{{ '${var.project_id}' }}/{{ '${var.artifact_repo}' }}/{{ svc.name }}:latest"
+
+      ports {
+        container_port = 80
+      }
+
+{% if svc.type == 'api' %}
+      env {
+        name = "MONGODB_URI"
+        value_source {
+          secret_key_ref {
+            secret  = "mongodb-uri"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "DB_NAME"
+        value_source {
+          secret_key_ref {
+            secret  = "db-name"
+            version = "latest"
+          }
+        }
+      }
+{% endif %}
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "{{ '512Mi' if svc.type == 'api' else '256Mi' }}"
+        }
+      }
+    }
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 10
+    }
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "{{ svc.name }}_public" {
+  name     = google_cloud_run_v2_service.{{ svc.name }}.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+{% endif %}
+{% endfor %}

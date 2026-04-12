@@ -1,0 +1,8 @@
+{% for svc in manifest.services %}
+{% if svc.enabled and svc.type in ['api', 'webapp'] %}
+output "{{ svc.name }}_url" {
+  description = "URL of the {{ svc.name }} service"
+  value       = google_cloud_run_v2_service.{{ svc.name }}.uri
+}
+{% endif %}
+{% endfor %}

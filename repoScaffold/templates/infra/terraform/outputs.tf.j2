@@ -1,0 +1,8 @@
+{% for svc in manifest.services %}
+{% if svc.enabled and svc.type in ['api', 'webapp'] %}
+output "{{ svc.name }}_url" {
+  description = "URL of the {{ svc.name }} Cloud Run service"
+  value       = module.cloudrun.{{ svc.name }}_url
+}
+{% endif %}
+{% endfor %}

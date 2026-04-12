@@ -1,0 +1,33 @@
+{% raw %}
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API: Node.js",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/services/api/src/index.js",
+      "envFile": "${workspaceFolder}/services/api/.env",
+      "restart": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Web: React Dev Server",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "cwd": "${workspaceFolder}/services/web",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Docker Compose Up",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "up", "--build"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
+{% endraw %}

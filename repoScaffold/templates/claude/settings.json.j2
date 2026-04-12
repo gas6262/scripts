@@ -1,0 +1,12 @@
+{
+  "project": "{{ manifest.project.name }}",
+  "description": "Full-stack {{ manifest.project.cloud.provider | upper }} application",
+  "conventions": [
+    "Services communicate via HTTP contracts only",
+    "All services are containerized with Docker",
+    "Infrastructure is managed with Terraform",
+    "Secrets are stored in GCP Secret Manager",
+    "API runs on port {{ manifest.services | selectattr('type', 'equalto', 'api') | map(attribute='port') | first | default(3006) }}",
+    "Web runs on port {{ manifest.services | selectattr('type', 'equalto', 'webapp') | map(attribute='port') | first | default(3005) }}"
+  ]
+}

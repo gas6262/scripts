@@ -1,0 +1,23 @@
+variable "project_id" {
+  description = "GCP project ID"
+  type        = string
+  default     = "{{ manifest.project.cloud.project_id }}"
+}
+
+variable "region" {
+  description = "GCP region"
+  type        = string
+  default     = "{{ manifest.project.cloud.region }}"
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "{{ manifest.project.env }}"
+}
+
+variable "project_name" {
+  description = "Human-readable project name"
+  type        = string
+  default     = "{{ manifest.project.name }}"
+}

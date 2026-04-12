@@ -1,0 +1,30 @@
+steps:
+  # Terraform init
+  - name: "hashicorp/terraform:1.7"
+    entrypoint: "sh"
+    args:
+      - "-c"
+      - |
+        cd infra/terraform/envs/dev
+        terraform init
+
+  # Terraform plan
+  - name: "hashicorp/terraform:1.7"
+    entrypoint: "sh"
+    args:
+      - "-c"
+      - |
+        cd infra/terraform/envs/dev
+        terraform plan -out=tfplan
+
+  # Terraform apply
+  - name: "hashicorp/terraform:1.7"
+    entrypoint: "sh"
+    args:
+      - "-c"
+      - |
+        cd infra/terraform/envs/dev
+        terraform apply -auto-approve tfplan
+
+options:
+  logging: CLOUD_LOGGING_ONLY
