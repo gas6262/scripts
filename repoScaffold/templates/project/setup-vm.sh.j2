@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# {{ manifest.project.name }} — Agent VM setup script
+# Run this once on a fresh GCE VM to install all dependencies and start all agents.
+#
+# Each agent gets its own tmux window within a single session.
+# Add a new agent by creating agents/<name>/PROMPT.md in the repo.
+#
+# Usage (from your local machine):
+#   ssh user@VM_IP 'bash -s' < setup-vm.sh
+#
+set -euo pipefail
+
+PROJECT_ID="{{ manifest.project.cloud.project_id }}"
+{% set gh_owner_placeholder = "GITHUB_OWNER" %}
+REPO_URL="git@github.com:{{ gh_owner_placeholder }}/{{ manifest.project.name | lower | replace(' ', '-') }}.git"
+REPO_DIR="$HOME/{{ manifest.project.name | lower | replace(' ', '-') }}"
+TMUX_SESSION="agents"
+
+echo "=== {{ manifest.project.name }} Agent VM Setup ==="
+
+# ── 1. System packages ─────────────────────────────────────────
+
+echo "[1/6] Installing system packages..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq tmux git curl jq
+
+# ── 2. Node.js ──────────────────────────────────────────────────
+
+if ! command -v node &>/dev/null; then
+  echo "[2/6] Installing Node.js..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+  sudo apt-get install -y -qq nodejs
+else
+  echo "[2/6] Node.js already installed: $(node --version)"
+fi
+
+# ── 3. Claude Code ──────────────────────────────────────────────
+
+mkdir -p ~/.npm-global
+npm config set prefix ~/.npm-global
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+grep -q '.npm-global/bin' ~/.bashrc 2>/dev/null || {
+  echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
+}
+
+if ! command -v claude &>/dev/null; then
+  echo "[3/6] Installing Claude Code..."
+  npm install -g @anthropic-ai/claude-code
+else
+  echo "[3/6] Claude Code already installed: $(claude --version)"
+fi
+
+# ── 4. Deploy key + repo clone ──────────────────────────────────
+
+echo "[4/6] Setting up deploy key and cloning repo..."
+mkdir -p ~/.ssh
+
+gcloud secrets versions access latest \
+  --secret=github-deploy-key \
+  --project="$PROJECT_ID" > ~/.ssh/deploy_key
+chmod 600 ~/.ssh/deploy_key
+
+export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+
+grep -q 'GIT_SSH_COMMAND' ~/.bashrc 2>/dev/null || {
+  echo 'export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"' >> ~/.bashrc
+}
+
+if [ -d "$REPO_DIR" ]; then
+  cd "$REPO_DIR" && git pull
+else
+  git clone "$REPO_URL" "$REPO_DIR"
+  cd "$REPO_DIR"
+fi
+
+# ── 5. Linear API key ──────────────────────────────────────────
+
+echo "[5/6] Pulling Linear API key..."
+mkdir -p ~/.linear
+gcloud secrets versions access latest \
+  --secret=linear-api-key \
+  --project="$PROJECT_ID" > ~/.linear/api_key 2>/dev/null || \
+  echo "Warning: linear-api-key not found. Linear integration disabled."
+chmod 600 ~/.linear/api_key 2>/dev/null || true
+
+# ── 6. Start all agents ────────────────────────────────────────
+
+echo "[6/6] Discovering agents and starting tmux sessions..."
+
+tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+
+FIRST=true
+for agent_dir in "$REPO_DIR"/agents/*/; do
+  agent_name=$(basename "$agent_dir")
+  if [ ! -f "$agent_dir/PROMPT.md" ]; then
+    echo "  Skipping $agent_name (no PROMPT.md)"
+    continue
+  fi
+
+  if [ "$FIRST" = true ]; then
+    tmux new-session -d -s "$TMUX_SESSION" -n "$agent_name" \
+      "export PATH=$HOME/.npm-global/bin:\$PATH; \
+       export GIT_SSH_COMMAND='ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no'; \
+       cd $REPO_DIR && ./loop.sh $agent_name"
+    FIRST=false
+  else
+    tmux new-window -t "$TMUX_SESSION" -n "$agent_name" \
+      "export PATH=$HOME/.npm-global/bin:\$PATH; \
+       export GIT_SSH_COMMAND='ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no'; \
+       cd $REPO_DIR && ./loop.sh $agent_name"
+  fi
+
+  echo "  Started: $agent_name"
+done
+
+echo ""
+echo "=== Setup complete ==="
+echo "Agents running in tmux session '$TMUX_SESSION'"
+echo ""
+echo "  Attach:       tmux attach -t $TMUX_SESSION"
+echo "  List windows:  tmux list-windows -t $TMUX_SESSION"
+echo "  Switch agent:  Ctrl+B, <window-number>"
+echo "  Logs:          /var/log/agent/${PROJECT_ID}/<agent-name>/"
+echo "  Cloud Logs:    https://console.cloud.google.com/logs/query;query=logName%3D%22projects%2F${PROJECT_ID}%2Flogs%2Fagent-%22?project=${PROJECT_ID}"

@@ -1,0 +1,4 @@
+name: ops
+description: Monitors production health, detects errors, and creates Linear issues.
+sleep_seconds: {{ agent.sleep_seconds | default(1800) }}
+max_turns: {{ agent.max_turns | default(100) }}

@@ -27,6 +27,7 @@ class CreateDirectories(BaseStep):
             "infra/terraform/envs/dev",
             "cloudbuild",
             "cloudrun",
+            "agents",
             ".vscode",
             ".claude",
         ]
@@ -157,3 +158,89 @@ class WriteEnvExample(BaseStep):
             manifest=ctx.manifest,
         )
         return {}
+
+
+@register_step
+class WriteAgentLoop(BaseStep):
+    step_id = "B.10_write_agent_loop"
+    phase = "B"
+    depends_on = ["B.1_create_directories"]
+
+    # Built-in agent templates shipped with the scaffolder
+    BUILTIN_AGENTS = ["developer", "reviewer", "ops"]
+
+    def run(self, ctx: ScaffoldContext) -> dict[str, Any]:
+        import os
+        from pathlib import Path
+
+        # Determine which agents to scaffold
+        manifest_roles = {r.name: r for r in ctx.manifest.agents.roles}
+        agent_names = list(manifest_roles.keys()) if manifest_roles else self.BUILTIN_AGENTS
+
+        agents_dir = ctx.project_dir / "agents"
+        scaffolded = []
+
+        for name in agent_names:
+            agent_dir = agents_dir / name
+            agent_dir.mkdir(parents=True, exist_ok=True)
+
+            role = manifest_roles.get(name)
+            agent_ctx = {
+                "sleep_seconds": role.sleep_seconds if role else None,
+                "max_turns": role.max_turns if role else None,
+            }
+
+            template_dir = Path(f"agents/{name}")
+            prompt_template = f"agents/{name}/PROMPT.md.j2"
+            config_template = f"agents/{name}/config.yaml.j2"
+
+            try:
+                render_to_file(
+                    prompt_template,
+                    agent_dir / "PROMPT.md",
+                    manifest=ctx.manifest,
+                    agent=agent_ctx,
+                )
+            except Exception:
+                # No built-in template — create a placeholder
+                (agent_dir / "PROMPT.md").write_text(
+                    f"# {name.title()} Agent\n\n"
+                    f"You are the **{name}** agent for **{ctx.manifest.project.name}**.\n\n"
+                    f"Define this agent's behavior by editing this file.\n"
+                )
+
+            try:
+                render_to_file(
+                    config_template,
+                    agent_dir / "config.yaml",
+                    manifest=ctx.manifest,
+                    agent=agent_ctx,
+                )
+            except Exception:
+                defaults = {"developer": (600, 1000), "reviewer": (1800, 200), "ops": (1800, 100)}
+                sleep_s, max_t = defaults.get(name, (600, 500))
+                (agent_dir / "config.yaml").write_text(
+                    f"name: {name}\n"
+                    f"description: {name.title()} agent\n"
+                    f"sleep_seconds: {agent_ctx.get('sleep_seconds') or sleep_s}\n"
+                    f"max_turns: {agent_ctx.get('max_turns') or max_t}\n"
+                )
+
+            scaffolded.append(name)
+
+        # Write shared loop.sh and setup-vm.sh
+        render_to_file(
+            "project/loop.sh.j2",
+            ctx.project_dir / "loop.sh",
+            manifest=ctx.manifest,
+        )
+        render_to_file(
+            "project/setup-vm.sh.j2",
+            ctx.project_dir / "setup-vm.sh",
+            manifest=ctx.manifest,
+        )
+
+        os.chmod(ctx.project_dir / "loop.sh", 0o755)
+        os.chmod(ctx.project_dir / "setup-vm.sh", 0o755)
+
+        return {"agents": scaffolded}

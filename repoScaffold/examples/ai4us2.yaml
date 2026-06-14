@@ -1,0 +1,54 @@
+project:
+  name: ai4us2
+  env: dev
+  cloud:
+    provider: gcp
+    region: us-central1
+    project_id: ai4us2
+
+database:
+  type: mongodb
+  atlas_cluster: Cluster0
+  db_name: ai4us2
+
+services:
+  - type: api
+    enabled: true
+    name: api
+    subdomain: api
+    stack: express
+    port: 3006
+
+  - type: webapp
+    enabled: true
+    name: app
+    subdomain: app
+    stack: react
+    port: 3005
+
+  - type: worker
+    enabled: true
+    name: worker
+    stack: python
+    port: 8080
+    gpu: required
+
+agents:
+  service_accounts:
+    - 464961297779-compute@developer.gserviceaccount.com
+  roles:
+    - name: developer
+      sleep_seconds: 600
+      max_turns: 1000
+    - name: reviewer
+      sleep_seconds: 1800
+      max_turns: 200
+    - name: ops
+      sleep_seconds: 1800
+      max_turns: 100
+
+linear:
+  enabled: true
+  workspace: ai4us
+  team_key: AI4
+  team_name: AI4US

@@ -1,0 +1,4 @@
+name: reviewer
+description: Reviews open PRs for correctness, security, and code quality.
+sleep_seconds: {{ agent.sleep_seconds | default(1800) }}
+max_turns: {{ agent.max_turns | default(200) }}

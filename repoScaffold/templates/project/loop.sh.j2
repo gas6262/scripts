@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# {{ manifest.project.name }} — Agent loop runner
+# Runs a single named agent in a loop. Each agent has its own PROMPT.md
+# and config.yaml under agents/<name>/.
+#
+# Usage:
+#   ./loop.sh developer          # Run the developer agent
+#   ./loop.sh reviewer           # Run the reviewer agent
+#   ./loop.sh ops                # Run the ops monitor agent
+#
+# The setup-vm.sh script starts all agents in separate tmux windows.
+
+AGENT_NAME="${1:?Usage: ./loop.sh <agent-name>}"
+PROJECT_ID="{{ manifest.project.cloud.project_id }}"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+AGENT_DIR="$REPO_DIR/agents/$AGENT_NAME"
+LOG_TAG="agent-${AGENT_NAME}-${PROJECT_ID}"
+LOG_DIR="/var/log/agent/${PROJECT_ID}/${AGENT_NAME}"
+
+if [ ! -f "$AGENT_DIR/PROMPT.md" ]; then
+  echo "ERROR: agents/$AGENT_NAME/PROMPT.md not found"
+  echo "Available agents:"
+  ls -1 "$REPO_DIR/agents/" 2>/dev/null | while read -r d; do
+    [ -f "$REPO_DIR/agents/$d/PROMPT.md" ] && echo "  - $d"
+  done
+  exit 1
+fi
+
+# Read agent config (with defaults)
+if [ -f "$AGENT_DIR/config.yaml" ]; then
+  SLEEP_SECONDS=$(grep -oP 'sleep_seconds:\s*\K\d+' "$AGENT_DIR/config.yaml" 2>/dev/null || echo 600)
+  MAX_TURNS=$(grep -oP 'max_turns:\s*\K\d+' "$AGENT_DIR/config.yaml" 2>/dev/null || echo 1000)
+else
+  SLEEP_SECONDS=600
+  MAX_TURNS=1000
+fi
+
+# Allow env overrides
+SLEEP_SECONDS="${AGENT_SLEEP_SECONDS:-$SLEEP_SECONDS}"
+MAX_TURNS="${AGENT_MAX_TURNS:-$MAX_TURNS}"
+
+# ── Logging ─────────────────────────────────────────────────────
+
+log() {
+  local msg="$1"
+  echo "[$AGENT_NAME] $msg"
+  logger -t "$LOG_TAG" "$msg" 2>/dev/null || true
+}
+
+# ── One-time setup ──────────────────────────────────────────────
+
+setup() {
+  log "=== Agent setup: $AGENT_NAME ==="
+
+  sudo mkdir -p "$LOG_DIR" && sudo chown "$(whoami)" "$LOG_DIR" 2>/dev/null || true
+
+  # Git auth
+  mkdir -p ~/.ssh
+  if [ ! -f ~/.ssh/deploy_key ] || [ ! -s ~/.ssh/deploy_key ]; then
+    log "Pulling deploy key from Secret Manager..."
+    gcloud secrets versions access latest \
+      --secret=github-deploy-key \
+      --project="$PROJECT_ID" > ~/.ssh/deploy_key 2>/dev/null || true
+    chmod 600 ~/.ssh/deploy_key 2>/dev/null || true
+  fi
+  export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+
+  # Linear API key
+  mkdir -p ~/.linear
+  if [ ! -f ~/.linear/api_key ] || [ ! -s ~/.linear/api_key ]; then
+    log "Pulling Linear API key from Secret Manager..."
+    gcloud secrets versions access latest \
+      --secret=linear-api-key \
+      --project="$PROJECT_ID" > ~/.linear/api_key 2>/dev/null || \
+      log "Warning: linear-api-key not found in Secret Manager."
+  fi
+
+  cd "$REPO_DIR"
+  log "Working in: $REPO_DIR"
+  log "Agent: $AGENT_NAME"
+  log "Prompt: agents/$AGENT_NAME/PROMPT.md"
+  log "Sleep: ${SLEEP_SECONDS}s | Max turns: $MAX_TURNS"
+  log "Logs: tag=$LOG_TAG, local=$LOG_DIR/"
+}
+
+# ── Disk cleanup ────────────────────────────────────────────────
+
+cleanup_disk() {
+  ls -t "$LOG_DIR"/iteration-*.log 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+  rm -rf /tmp/npm-* /tmp/pip-* 2>/dev/null || true
+}
+
+# ── Main loop ───────────────────────────────────────────────────
+
+run_iteration() {
+  local iteration=$1
+  local log_file="$LOG_DIR/iteration-${iteration}.log"
+
+  log "=== Iteration $iteration — $(date) ==="
+
+  cleanup_disk
+
+  cd "$REPO_DIR"
+  git checkout main 2>/dev/null || true
+  git pull --rebase || git pull || true
+
+  claude -p "$(cat "$AGENT_DIR/PROMPT.md")" \
+    --allowedTools "Read,Edit,Write,Bash,Glob,Grep" \
+    --max-turns "$MAX_TURNS" \
+    --dangerously-skip-permissions \
+    2>&1 | tee "$log_file" || true
+
+  log "=== Iteration $iteration complete — sleeping ${SLEEP_SECONDS}s ==="
+
+  if [ -s "$log_file" ]; then
+    tail -50 "$log_file" | while IFS= read -r line; do
+      logger -t "$LOG_TAG" "iter=$iteration $line" 2>/dev/null || true
+    done
+  fi
+}
+
+# ── Entry point ─────────────────────────────────────────────────
+
+setup
+
+iteration=1
+while true; do
+  run_iteration "$iteration" || log "Iteration $iteration failed — continuing"
+  iteration=$((iteration + 1))
+  sleep "$SLEEP_SECONDS" || true
+done
