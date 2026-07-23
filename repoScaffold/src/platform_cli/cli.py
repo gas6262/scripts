@@ -6,6 +6,7 @@ import click
 from platform_cli.commands.scaffold import scaffold
 from platform_cli.commands.install import install
 from platform_cli.commands.test_cmd import test
+from platform_cli.commands.create_agent_identity import create_agent_identity
 
 
 @click.group()
@@ -17,3 +18,4 @@ def cli() -> None:
 cli.add_command(scaffold)
 cli.add_command(install)
 cli.add_command(test)
+cli.add_command(create_agent_identity)
